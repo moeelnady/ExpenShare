@@ -6,10 +6,12 @@ import java.util.List;
 
 import io.micronaut.serde.annotation.Serdeable;
 
+import lombok.Builder;
 import lombok.Data;
 
 @Serdeable
 @Data
+@Builder
 public class GroupDto {
     private Long          groupId;
     private String        name;
