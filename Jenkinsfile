@@ -1,9 +1,11 @@
 pipeline {
-    agent any
-    tools {
-        jdk 'java21'  // Java 21 for Micronaut
-        gradle 'gradle8' // Gradle 8.x
-    }
+        agent {
+            docker {
+                image 'gradle:8.7-jdk21-alpine'
+                args '-v $HOME/.gradle:/home/gradle/.gradle --user root'
+                reuseNode true
+            }
+        }
     stages {
         stage('Build') {
                     steps {
