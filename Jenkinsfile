@@ -1,5 +1,5 @@
 pipeline {
-
+    agent none
     environment {
         DOCKER_IMAGE = "moeelnady/expenshare:latest"
         DOCKERHUB_CRED = credentials('dockerhub-cred')
