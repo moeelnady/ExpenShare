@@ -8,6 +8,8 @@ pipeline {
         }
         environment {
                 DOCKER_IMAGE = "expenshare:latest"
+                DOCKERHUB_CRED = credentials('dockerhub-cred')
+
         }
     stages {
         stage('Build') {
@@ -33,6 +35,18 @@ pipeline {
                             docker build -t ${DOCKER_IMAGE} .
                         """
                     }
+        }
+        stage('Docker Push') {
+            agent any
+            steps {
+                sh """
+                    echo "Logging into Docker Hub..."
+                    echo "${DOCKER_CREDENTIALS_PSW}" | docker login -u "${DOCKER_CREDENTIALS_USR}" --password-stdin
+
+                    echo "Pushing image ${DOCKER_IMAGE} ..."
+                    docker push ${DOCKER_IMAGE}
+                """
+            }
         }
 
     }
