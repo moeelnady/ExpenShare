@@ -6,6 +6,9 @@ pipeline {
                 reuseNode true
             }
         }
+        environment {
+                DOCKER_IMAGE = "expenshare:latest"
+        }
     stages {
         stage('Build') {
                     steps {
@@ -13,7 +16,7 @@ pipeline {
                     }
                 }
 
-                stage('Unit Tests') {
+        stage('Unit Tests') {
                     steps {
                         sh './gradlew test'
                     }
@@ -22,6 +25,15 @@ pipeline {
                             junit 'build/test-results/test/**/*.xml'
                         }
                     }
-                }
+        }
+        stage('Docker Build') {
+                    agent any   // Use Jenkins host, not the gradle docker container
+                    steps {
+                        sh """
+                            docker build -t ${DOCKER_IMAGE} .
+                        """
+                    }
+        }
+
     }
 }
