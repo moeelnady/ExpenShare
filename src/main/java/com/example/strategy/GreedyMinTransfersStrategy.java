@@ -27,7 +27,8 @@ public class GreedyMinTransfersStrategy implements SettlementStrategy{
         payers.sort(Comparator.comparing(UserBalance::getBalance).reversed());
         receivers.sort(Comparator.comparing(UserBalance::getBalance));
         List<SettlementSuggestion> suggestions = new ArrayList<>();
-        int i = 0, j = 0;
+        int i = 0;
+        int j = 0;
         while(i< payers.size() && j < receivers.size()){
             UserBalance payer = payers.get(i);
             UserBalance receiver = receivers.get(j);

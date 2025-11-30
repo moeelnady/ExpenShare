@@ -22,14 +22,11 @@ public class UserController {
     @Operation(summary = "Create a new user", description = "Adds a user to the system")
     @Post("/user")
     public HttpResponse<?> createUser(@Body @Valid CreateUserRequest userRequest){
-        System.out.println(userRequest.toString());
         return HttpResponse.created(userService.createUser(userRequest));
     }
     @Operation(summary = "Get user by ID", description = "Fetch user details by ID")
     @Get("/users/{id}")
     public HttpResponse<?> getUser(Long id){
-        System.out.println("id= "+id);
-
         return HttpResponse.ok(userService.getUserById(id));
     }
 }

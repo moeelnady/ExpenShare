@@ -66,67 +66,109 @@ public class ExpenseService {
     }
     private List<ExpenseShareEntity> buildShares(ExpenseEntity expense,
                                                  CreateExpenseRequest req,
-                                                 GroupEntity group){
-        List<ExpenseShareEntity> result = new ArrayList<>();
+                                                 GroupEntity group) {
+
+        return switch (req.getSplitType()) {
+            case EQUAL   -> buildEqualShares(expense, req, group);
+            case EXACT   -> buildExactShares(expense, req);
+            case PERCENT -> buildPercentShares(expense, req);
+        };
+    }
+    private List<ExpenseShareEntity> buildEqualShares(
+            ExpenseEntity expense,
+            CreateExpenseRequest req,
+            GroupEntity group) {
+
+        List<Long> userIds = resolveParticipants(req, group);
         BigDecimal total = req.getAmount();
-        switch (req.getSplitType()){
-            case EQUAL ->{
-                List<Long> participantIds = (req.getParticipants() != null && !req.getParticipants().isEmpty())
-                        ? req.getParticipants()
-                        : groupRepositoryFacade.findUserIdsByGroupId(group.getId());
+        BigDecimal perHead = total.divide(BigDecimal.valueOf(userIds.size()), 2, RoundingMode.HALF_UP);
 
-                BigDecimal perHead = total.divide(BigDecimal.valueOf(participantIds.size()), 2, RoundingMode.HALF_UP);
-                for (Long uid : participantIds) {
-                    UserEntity user = userRepositoryFacade.getOrThrow(uid);
-                    ExpenseShareEntity share = new ExpenseShareEntity();
-                    share.setExpense(expense);
-                    share.setUser(user);
-                    // payer gets negative share (they paid more than their part)
-                    BigDecimal shareValue = uid.equals(req.getPaidBy())
-                            ? perHead.subtract(total) // negative for payer
-                            : perHead;
-                    share.setShareAmount(shareValue);
-                    result.add(share);
-                }
+        List<ExpenseShareEntity> shares = new ArrayList<>();
+        for (Long uid : userIds) {
+            BigDecimal shareValue = uid.equals(req.getPaidBy())
+                    ? perHead.subtract(total)
+                    : perHead;
 
-            }
-            case EXACT -> {
-                BigDecimal sum = req.getShares().stream()
-                        .map(ShareRequest::getAmount)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-                if (sum.compareTo(total) != 0) {
-                    throw new ValidationException("Split amounts must total " + total);
-                }
-                for (ShareRequest sr : req.getShares()) {
-                    UserEntity user = userRepositoryFacade.getOrThrow(sr.getUserId());
-                    ExpenseShareEntity share = new ExpenseShareEntity();
-                    share.setExpense(expense);
-                    share.setUser(user);
-                    share.setShareAmount(sr.getAmount());
-                    result.add(share);
-                }
-            }
-
-            case PERCENT -> {
-                int percentSum = req.getShares().stream()
-                        .mapToInt(ShareRequest::getPercent)
-                        .sum();
-                if (percentSum != 100) {
-                    throw new ValidationException("Split percentages must total 100");
-                }
-                for (ShareRequest sr : req.getShares()) {
-                    UserEntity user = userRepositoryFacade.getOrThrow(sr.getUserId());
-                    ExpenseShareEntity share = new ExpenseShareEntity();
-                    share.setExpense(expense);
-                    share.setUser(user);
-                    BigDecimal value = total
-                            .multiply(BigDecimal.valueOf(sr.getPercent()))
-                            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                    share.setShareAmount(value);
-                    result.add(share);
-                }
-            }
+            shares.add(createShare(expense, userRepositoryFacade.getOrThrow(uid), shareValue));
         }
-        return result;
+        return shares;
+    }
+    private List<ExpenseShareEntity> buildExactShares(ExpenseEntity expense,
+                                                      CreateExpenseRequest req) {
+
+        validateExactSum(req);
+
+        List<ExpenseShareEntity> shares = new ArrayList<>();
+        for (ShareRequest sr : req.getShares()) {
+            shares.add(createShare(
+                    expense,
+                    userRepositoryFacade.getOrThrow(sr.getUserId()),
+                    sr.getAmount()
+            ));
         }
+        return shares;
+    }
+    private List<ExpenseShareEntity> buildPercentShares(ExpenseEntity expense,
+                                                        CreateExpenseRequest req) {
+
+        validatePercentSum(req);
+
+        BigDecimal total = req.getAmount();
+        List<ExpenseShareEntity> shares = new ArrayList<>();
+
+        for (ShareRequest sr : req.getShares()) {
+            BigDecimal value = total
+                    .multiply(BigDecimal.valueOf(sr.getPercent()))
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+            shares.add(createShare(
+                    expense,
+                    userRepositoryFacade.getOrThrow(sr.getUserId()),
+                    value
+            ));
+        }
+        return shares;
+    }
+    private List<Long> resolveParticipants(CreateExpenseRequest req, GroupEntity group) {
+        if (req.getParticipants() != null && !req.getParticipants().isEmpty()) {
+            return req.getParticipants();
+        }
+        return groupRepositoryFacade.findUserIdsByGroupId(group.getId());
+    }
+    private void validateExactSum(CreateExpenseRequest req) {
+        BigDecimal total = req.getAmount();
+        BigDecimal sum = req.getShares().stream()
+                .map(ShareRequest::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (sum.compareTo(total) != 0) {
+            throw new ValidationException("Split amounts must total " + total);
+        }
+    }
+
+    private void validatePercentSum(CreateExpenseRequest req) {
+        int percentSum = req.getShares().stream()
+                .mapToInt(ShareRequest::getPercent)
+                .sum();
+
+        if (percentSum != 100) {
+            throw new ValidationException("Split percentages must total 100");
+        }
+    }
+    private ExpenseShareEntity createShare(ExpenseEntity expense,
+                                           UserEntity user,
+                                           BigDecimal amount) {
+        ExpenseShareEntity share = new ExpenseShareEntity();
+        share.setExpense(expense);
+        share.setUser(user);
+        share.setShareAmount(amount);
+        return share;
+    }
+
+
+
+
+
+
+
 }

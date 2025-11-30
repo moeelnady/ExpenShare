@@ -138,7 +138,6 @@ public class GroupService {
     }
     @Transactional
     public SuggestionResponse suggest(Long groupId, SettlementStrategyType type, BigDecimal roundTo){
-        GroupEntity group = groupRepositoryFacade.getGroupOrThrow(groupId);
         Map<Long, BigDecimal> balances = getBalancesByGroupId(groupId);
         SettlementStrategy strategy = strategyFactory.getStrategy(type);
         List<UserBalance> userBalancesList = balances.entrySet().stream()

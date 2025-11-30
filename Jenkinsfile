@@ -6,10 +6,6 @@ pipeline {
     }
 
     stages {
-
-        /* ----------------------------
-           BUILD STAGE (GRADLE INSIDE DOCKER)
-        ------------------------------ */
         stage('Build') {
             agent {
                 docker {
@@ -21,10 +17,6 @@ pipeline {
                 sh './gradlew clean build -x test'
             }
         }
-
-        /* ----------------------------
-           TEST STAGE (ALSO INSIDE GRADLE DOCKER)
-        ------------------------------ */
         stage('Unit Tests') {
             agent {
                 docker {
