@@ -2,6 +2,7 @@ plugins {
     id("io.micronaut.application") version "4.5.4"
     id("com.gradleup.shadow") version "8.3.7"
     id("io.micronaut.aot") version "4.5.4"
+    id("jacoco")
 }
 
 version = "0.1"
@@ -66,6 +67,67 @@ micronaut {
 
 tasks.named("dockerfileNative") {
     jdkVersion = "21"
+}
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+tasks.test {
+    useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                    "**/com/example/Application*",
+                    "**/com/example/*Application*",
+                    "**/com/example/*Config*",
+                    "**/com/example/*Exception*",
+                    "**/com/example/dto/**",
+                    "**/com/example/model/**",
+                    "**/com/example/entity/**"
+            ])
+        }))
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.5
+            }
+        }
+        rule {
+            element = "CLASS"
+            excludes = [
+                    "com.example.ExpenShareApplication",
+                    "com.example.*Application*",
+                    "com.example.*Config*"
+            ]
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = 0.5
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
 

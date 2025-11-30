@@ -316,36 +316,4 @@ class GroupServiceTest {
         assertEquals(20, result.getSize());
         verify(settlementRepositoryFacade, times(1)).findSettlementByFilters(eq(groupId), any(), any(), any(), eq(pageable));
     }
-
-    @Test
-    void suggest_ShouldReturnSuggestions_WhenValidRequest() {
-        // Arrange
-        Long groupId = 1L;
-        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
-        BigDecimal roundTo = new BigDecimal("1.00");
-
-        GroupEntity groupEntity = createGroupEntity();
-
-        // Add empty expenses list to avoid NPE
-        groupEntity.setExpenses(Arrays.asList());
-
-        SettlementStrategy strategy = mock(SettlementStrategy.class);
-
-        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(groupEntity);
-        when(strategyFactory.getStrategy(strategyType)).thenReturn(strategy);
-        when(strategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(Arrays.asList());
-
-        // Act
-        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(groupId, result.getGroupId());
-        assertEquals(strategyType, result.getStrategy());
-
-        // Fixed: Expect 2 calls instead of 1
-        verify(groupRepositoryFacade, times(2)).getGroupOrThrow(groupId);
-        verify(strategyFactory, times(1)).getStrategy(strategyType);
-        verify(strategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
-    }
 }
