@@ -6,7 +6,7 @@ pipeline {
         DOCKERHUB_CRED = credentials('dockerhub-cred')
 
         // SonarCloud token stored in Jenkins credentials (type: secret text)
-        SONAR_TOKEN = credentials('sonarqube')
+        SONAR_TOKEN = credentials('75f1b68b-52e8-4a74-a959-80826d0b4d70')
         SONAR_SCANNER = tool 'SonarScanner'  // Jenkins tool name
     }
 
