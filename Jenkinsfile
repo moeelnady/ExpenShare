@@ -1,11 +1,20 @@
 pipeline {
     agent none
+
     environment {
         DOCKER_IMAGE = "moeelnady/expenshare:latest"
         DOCKERHUB_CRED = credentials('dockerhub-cred')
+
+        // SonarCloud token stored in Jenkins credentials (type: secret text)
+        SONAR_TOKEN = credentials('sonarqube')
+        SONAR_SCANNER = tool 'SonarScanner'  // Jenkins tool name
     }
 
     stages {
+
+        /* ----------------------------
+           BUILD STAGE
+        ------------------------------ */
         stage('Build') {
             agent {
                 docker {
@@ -17,18 +26,64 @@ pipeline {
                 sh './gradlew clean build -x test'
             }
         }
-        stage('Unit Tests') {
+
+        /* ----------------------------
+           UNIT TESTS + JACOCO
+        ------------------------------ */
+        stage('Unit Tests & Jacoco') {
             agent {
                 docker {
-                    image 'gradle:8.7-jdk21-alpine'
+                    image 'gradle:8.7-jdk21-jdk21-alpine'
                     args '-v $HOME/.gradle:/home/gradle/.gradle --user root'
                 }
             }
             steps {
-                sh './gradlew test'
+                // run tests and generate jacoco reports
+                sh './gradlew test jacocoTestReport'
             }
             post {
-                always { junit 'build/test-results/test/**/*.xml' }
+                always {
+                    junit 'build/test-results/test/**/*.xml'
+                    // optional: archive Jacoco HTML
+                    archiveArtifacts artifacts: 'build/reports/jacoco/test/html/**', allowEmptyArchive: true
+                }
+            }
+        }
+
+        /* ----------------------------
+           SONARCLOUD ANALYSIS
+        ------------------------------ */
+        stage('SonarCloud Analysis') {
+            agent any
+            steps {
+                withSonarQubeEnv('SonarCloud') {
+                    sh """
+                        ${env.SONAR_SCANNER}/bin/sonar-scanner \
+                          -Dsonar.projectKey=moeelnady_ExpenShare \
+                          -Dsonar.organization=moeelnady \
+                          -Dsonar.host.url=https://sonarcloud.io \
+                          -Dsonar.login=${SONAR_TOKEN_PSW} \
+                          -Dsonar.sources=src/main/java \
+                          -Dsonar.tests=src/test/java \
+                          -Dsonar.java.binaries=build/classes/java/main \
+                          -Dsonar.java.test.binaries=build/classes/java/test \
+                          -Dsonar.junit.reportPaths=build/test-results/test \
+                          -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \
+                          -Dsonar.sourceEncoding=UTF-8
+                    """
+                }
+            }
+        }
+
+        /* ----------------------------
+           QUALITY GATE
+        ------------------------------ */
+        stage('Quality Gate') {
+            agent any
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 
@@ -36,7 +91,7 @@ pipeline {
            DOCKER BUILD (ON JENKINS HOST)
         ------------------------------ */
         stage('Docker Build') {
-            agent any  // Jenkins host
+            agent any
             steps {
                 sh "docker build -t ${DOCKER_IMAGE} ."
             }
@@ -49,10 +104,7 @@ pipeline {
             agent any
             steps {
                 sh """
-                    echo "Logging into Docker Hub..."
                     echo "${DOCKERHUB_CRED_PSW}" | docker login -u "${DOCKERHUB_CRED_USR}" --password-stdin
-
-                    echo "Pushing image ${DOCKER_IMAGE}"
                     docker push ${DOCKER_IMAGE}
                 """
             }
