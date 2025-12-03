@@ -61,8 +61,8 @@ pipeline {
                     sh """
                         SONAR_TOKEN=${SONAR_TOKEN_CRED_PSW} \
                         ${SONAR_SCANNER}/bin/sonar-scanner \
-                            -Dsonar.projectKey=****_ExpenShare \
-                            -Dsonar.organization=**** \
+                            -Dsonar.projectKey=moeelnady_ExpenShare \
+                            -Dsonar.organization=moeelnady \
                             -Dsonar.sources=src/main/java \
                             -Dsonar.tests=src/test/java \
                             -Dsonar.java.binaries=build/classes/java/main \
