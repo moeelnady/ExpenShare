@@ -5,9 +5,8 @@ pipeline {
         DOCKER_IMAGE = "moeelnady/expenshare:latest"
         DOCKERHUB_CRED = credentials('dockerhub-cred')
 
-        // SonarCloud token stored in Jenkins credentials (type: secret text)
+        // SonarCloud token stored in Jenkins credentials (secret text)
         SONAR_TOKEN = credentials('75f1b68b-52e8-4a74-a959-80826d0b4d70')
-        SONAR_SCANNER = tool 'SonarScanner'  // Jenkins tool name
     }
 
     stages {
@@ -33,18 +32,16 @@ pipeline {
         stage('Unit Tests & Jacoco') {
             agent {
                 docker {
-                    image 'gradle:8.7-jdk21-jdk21-alpine'
+                    image 'gradle:8.7-jdk21-alpine'
                     args '-v $HOME/.gradle:/home/gradle/.gradle --user root'
                 }
             }
             steps {
-                // run tests and generate jacoco reports
                 sh './gradlew test jacocoTestReport'
             }
             post {
                 always {
                     junit 'build/test-results/test/**/*.xml'
-                    // optional: archive Jacoco HTML
                     archiveArtifacts artifacts: 'build/reports/jacoco/test/html/**', allowEmptyArchive: true
                 }
             }
@@ -56,9 +53,14 @@ pipeline {
         stage('SonarCloud Analysis') {
             agent any
             steps {
+                script {
+                    // IMPORTANT: tool() must be inside a node context
+                    SONAR_SCANNER = tool 'SonarScanner'
+                }
+
                 withSonarQubeEnv('SonarCloud') {
                     sh """
-                        ${env.SONAR_SCANNER}/bin/sonar-scanner \
+                        ${SONAR_SCANNER}/bin/sonar-scanner \
                           -Dsonar.projectKey=moeelnady_ExpenShare \
                           -Dsonar.organization=moeelnady \
                           -Dsonar.host.url=https://sonarcloud.io \
@@ -88,7 +90,7 @@ pipeline {
         }
 
         /* ----------------------------
-           DOCKER BUILD (ON JENKINS HOST)
+           DOCKER BUILD
         ------------------------------ */
         stage('Docker Build') {
             agent any
@@ -98,7 +100,7 @@ pipeline {
         }
 
         /* ----------------------------
-           DOCKER PUSH (ON JENKINS HOST)
+           DOCKER PUSH
         ------------------------------ */
         stage('Docker Push') {
             agent any
