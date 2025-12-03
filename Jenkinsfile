@@ -4,9 +4,8 @@ pipeline {
     environment {
         DOCKER_IMAGE = "moeelnady/expenshare:latest"
         DOCKERHUB_CRED = credentials('dockerhub-cred')
-
         // SonarCloud token stored in Jenkins credentials (secret text)
-        SONAR_TOKEN = credentials('75f1b68b-52e8-4a74-a959-80826d0b4d70')
+        SONAR_TOKEN_CRED = credentials('75f1b68b-52e8-4a74-a959-80826d0b4d70')
     }
 
     stages {
@@ -60,18 +59,17 @@ pipeline {
 
                 withSonarQubeEnv('SonarCloud') {
                     sh """
+                        SONAR_TOKEN=${SONAR_TOKEN_CRED_PSW} \
                         ${SONAR_SCANNER}/bin/sonar-scanner \
-                          -Dsonar.projectKey=moeelnady_ExpenShare \
-                          -Dsonar.organization=moeelnady \
-                          -Dsonar.host.url=https://sonarcloud.io \
-                          -Dsonar.login=${SONAR_TOKEN_PSW} \
-                          -Dsonar.sources=src/main/java \
-                          -Dsonar.tests=src/test/java \
-                          -Dsonar.java.binaries=build/classes/java/main \
-                          -Dsonar.java.test.binaries=build/classes/java/test \
-                          -Dsonar.junit.reportPaths=build/test-results/test \
-                          -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \
-                          -Dsonar.sourceEncoding=UTF-8
+                            -Dsonar.projectKey=****_ExpenShare \
+                            -Dsonar.organization=**** \
+                            -Dsonar.sources=src/main/java \
+                            -Dsonar.tests=src/test/java \
+                            -Dsonar.java.binaries=build/classes/java/main \
+                            -Dsonar.java.test.binaries=build/classes/java/test \
+                            -Dsonar.junit.reportPaths=build/test-results/test \
+                            -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \
+                            -Dsonar.sourceEncoding=UTF-8
                     """
                 }
             }
