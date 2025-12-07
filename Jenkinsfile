@@ -53,7 +53,7 @@ pipeline {
             steps {
                 script {
                     // IMPORTANT: tool() must be inside a node context
-                    SONAR_SCANNER = tool 'SonarScanner'
+                    def SONAR_SCANNER = tool 'SonarScanner'
                 }
                 withSonarQubeEnv('SonarCloud') {
                     sh """
