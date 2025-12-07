@@ -51,27 +51,26 @@ pipeline {
         stage('SonarCloud Analysis') {
             agent any
             steps {
-                script {
-                    // IMPORTANT: tool() must be inside a node context
-                    def SONAR_SCANNER = tool 'SonarScanner'
-                }
                 withSonarQubeEnv('SonarCloud') {
-                    sh """
-                        SONAR_TOKEN=${SONAR_TOKEN_CRED} \
-                        ${SONAR_SCANNER}/bin/sonar-scanner \
-                            -Dsonar.projectKey=moeelnady_ExpenShare \
-                            -Dsonar.organization=moeelnady \
-                            -Dsonar.sources=src/main/java \
-                            -Dsonar.tests=src/test/java \
-                            -Dsonar.java.binaries=build/classes/java/main \
-                            -Dsonar.java.test.binaries=build/classes/java/test \
-                            -Dsonar.junit.reportPaths=build/test-results/test \
-                            -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \
-                            -Dsonar.sourceEncoding=UTF-8
-                    """
+                    script {
+                        def SONAR_SCANNER = tool 'SonarScanner'
+                        sh """
+                            ${SONAR_SCANNER}/bin/sonar-scanner \
+                                -Dsonar.projectKey=moeelnady_ExpenShare \
+                                -Dsonar.organization=moeelnady \
+                                -Dsonar.sources=src/main/java \
+                                -Dsonar.tests=src/test/java \
+                                -Dsonar.java.binaries=build/classes/java/main \
+                                -Dsonar.java.test.binaries=build/classes/java/test \
+                                -Dsonar.junit.reportPaths=build/test-results/test \
+                                -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \
+                                -Dsonar.sourceEncoding=UTF-8
+                        """
+                    }
                 }
             }
         }
+
 
         /* ----------------------------
            QUALITY GATE
