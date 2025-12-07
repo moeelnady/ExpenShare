@@ -1,11 +1,10 @@
 pipeline {
     agent none
-
     environment {
         DOCKER_IMAGE = "moeelnady/expenshare:latest"
         DOCKERHUB_CRED = credentials('dockerhub-cred')
         // SonarCloud token stored in Jenkins credentials (secret text)
-        SONAR_TOKEN_CRED = credentials('75f1b68b-52e8-4a74-a959-80826d0b4d70')
+        SONAR_TOKEN_CRED = credentials('sonar-jen')
     }
 
     stages {
@@ -56,10 +55,9 @@ pipeline {
                     // IMPORTANT: tool() must be inside a node context
                     SONAR_SCANNER = tool 'SonarScanner'
                 }
-
                 withSonarQubeEnv('SonarCloud') {
                     sh """
-                        SONAR_TOKEN=${SONAR_TOKEN_CRED_PSW} \
+                        SONAR_TOKEN=${SONAR_TOKEN_CRED} \
                         ${SONAR_SCANNER}/bin/sonar-scanner \
                             -Dsonar.projectKey=moeelnady_ExpenShare \
                             -Dsonar.organization=moeelnady \
