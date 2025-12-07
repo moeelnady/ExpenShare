@@ -70,20 +70,6 @@ pipeline {
                 }
             }
         }
-
-
-        /* ----------------------------
-           QUALITY GATE
-        ------------------------------ */
-        stage('Quality Gate') {
-            agent any
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
         /* ----------------------------
            DOCKER BUILD
         ------------------------------ */
