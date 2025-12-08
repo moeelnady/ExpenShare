@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Singleton
 @RequiredArgsConstructor
@@ -139,6 +140,7 @@ public class ExpenseService {
         BigDecimal total = req.getAmount();
         BigDecimal sum = req.getShares().stream()
                 .map(ShareRequest::getAmount)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (sum.compareTo(total) != 0) {
@@ -148,7 +150,7 @@ public class ExpenseService {
 
     private void validatePercentSum(CreateExpenseRequest req) {
         int percentSum = req.getShares().stream()
-                .mapToInt(ShareRequest::getPercent)
+                .mapToInt(sr -> sr.getPercent() != null ? sr.getPercent() : 0)
                 .sum();
 
         if (percentSum != 100) {
@@ -164,11 +166,4 @@ public class ExpenseService {
         share.setShareAmount(amount);
         return share;
     }
-
-
-
-
-
-
-
 }

@@ -23,4 +23,7 @@ public class ShareRequest {
     @Min(0)
     @Max(100)
     private Integer percent;
+
+    public ShareRequest(long l, BigDecimal bigDecimal, int i) {
+    }
 }

@@ -255,4 +255,96 @@ class GroupControllerTest {
         assertEquals(groupId, response.getBody().get().getGroupId());
         verify(groupService, times(1)).suggest(eq(groupId), eq(SettlementStrategyType.GREEDY_MIN_TRANSFERS), any(BigDecimal.class));
     }
+    @Test
+    void suggestSettlements_ShouldHandleAllStrategyTypes() {
+        // Test each strategy type
+        for (SettlementStrategyType strategyType : SettlementStrategyType.values()) {
+            // Arrange
+            Long groupId = 1L;
+            SuggestionRequest request = new SuggestionRequest();
+            request.setStrategy(strategyType);
+            request.setRoundTo(new BigDecimal("1.00"));
+
+            SuggestionResponse expectedResponse = new SuggestionResponse(
+                    groupId,
+                    Arrays.asList(),
+                    0,
+                    strategyType
+            );
+
+            when(groupService.suggest(eq(groupId), eq(strategyType), any(BigDecimal.class)))
+                    .thenReturn(expectedResponse);
+
+            // Act
+            var response = client.toBlocking().exchange(
+                    HttpRequest.POST("/api/groups/" + groupId + "/settlements/suggest", request),
+                    SuggestionResponse.class
+            );
+
+            // Assert
+            assertEquals(HttpStatus.OK, response.getStatus());
+            assertEquals(strategyType, response.getBody().get().getStrategy());
+
+            // Reset mocks for next iteration
+            reset(groupService);
+        }
+    }
+
+    @Test
+    void suggestSettlements_ShouldUseDefaultStrategy_WhenStrategyNotProvided() {
+        // Arrange
+        Long groupId = 1L;
+        SuggestionRequest request = new SuggestionRequest();
+        // Don't set strategy - should use default
+        request.setRoundTo(new BigDecimal("1.00"));
+
+        SuggestionResponse expectedResponse = new SuggestionResponse(
+                groupId,
+                Arrays.asList(),
+                0,
+                SettlementStrategyType.GREEDY_MIN_TRANSFERS // Default
+        );
+
+        when(groupService.suggest(eq(groupId), eq(SettlementStrategyType.GREEDY_MIN_TRANSFERS), any(BigDecimal.class)))
+                .thenReturn(expectedResponse);
+
+        // Act
+        var response = client.toBlocking().exchange(
+                HttpRequest.POST("/api/groups/" + groupId + "/settlements/suggest", request),
+                SuggestionResponse.class
+        );
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatus());
+        assertEquals(SettlementStrategyType.GREEDY_MIN_TRANSFERS, response.getBody().get().getStrategy());
+    }
+
+    @Test
+    void suggestSettlements_ShouldHandleNullRoundTo() {
+        // Arrange
+        Long groupId = 1L;
+        SuggestionRequest request = new SuggestionRequest();
+        request.setStrategy(SettlementStrategyType.GREEDY_MIN_TRANSFERS);
+        // Don't set roundTo - should be null
+
+        SuggestionResponse expectedResponse = new SuggestionResponse(
+                groupId,
+                Arrays.asList(),
+                0,
+                SettlementStrategyType.GREEDY_MIN_TRANSFERS
+        );
+
+        when(groupService.suggest(eq(groupId), eq(SettlementStrategyType.GREEDY_MIN_TRANSFERS), eq(null)))
+                .thenReturn(expectedResponse);
+
+        // Act
+        var response = client.toBlocking().exchange(
+                HttpRequest.POST("/api/groups/" + groupId + "/settlements/suggest", request),
+                SuggestionResponse.class
+        );
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatus());
+        verify(groupService, times(1)).suggest(eq(groupId), eq(SettlementStrategyType.GREEDY_MIN_TRANSFERS), eq(null));
+    }
 }

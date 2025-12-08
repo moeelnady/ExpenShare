@@ -5,6 +5,7 @@ import com.example.exception.NotFoundException;
 import com.example.model.dto.group.*;
 import com.example.model.dto.settlement.GroupSettlementPageResponse;
 import com.example.model.dto.settlement.SettlementItem;
+import com.example.model.dto.settlement.SettlementSuggestion;
 import com.example.model.dto.settlement.SuggestionResponse;
 import com.example.model.entity.*;
 import com.example.model.mapper.GroupMapper;
@@ -24,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -315,5 +317,344 @@ class GroupServiceTest {
         assertEquals(0, result.getPage());
         assertEquals(20, result.getSize());
         verify(settlementRepositoryFacade, times(1)).findSettlementByFilters(eq(groupId), any(), any(), any(), eq(pageable));
+    }
+    @Test
+    void suggest_ShouldReturnSuggestions_WhenValidGroupAndStrategy() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("1.00");
+
+        GroupEntity group = createGroupEntity();
+
+        // Mock balances
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        balances.put(1L, new BigDecimal("50.00"));  // User 1 is owed 50
+        balances.put(2L, new BigDecimal("-30.00")); // User 2 owes 30
+        balances.put(3L, new BigDecimal("-20.00")); // User 3 owes 20
+
+        // Mock strategy
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = Arrays.asList(
+                new SettlementSuggestion(2L, 1L, new BigDecimal("30.00")),
+                new SettlementSuggestion(3L, 1L, new BigDecimal("20.00"))
+        );
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(expectedSuggestions);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(groupId, result.getGroupId());
+        assertEquals(strategyType, result.getStrategy());
+        assertEquals(2, result.getSuggestions().size());
+        assertEquals(2, result.getTotalTransfers());
+
+        // Verify suggestions
+        assertEquals(2L, result.getSuggestions().getFirst().getFromUserId());
+        assertEquals(1L, result.getSuggestions().get(0).getToUserId());
+        assertEquals(new BigDecimal("30.00"), result.getSuggestions().get(0).getAmount());
+
+        assertEquals(3L, result.getSuggestions().get(1).getFromUserId());
+        assertEquals(1L, result.getSuggestions().get(1).getToUserId());
+        assertEquals(new BigDecimal("20.00"), result.getSuggestions().get(1).getAmount());
+
+        verify(groupRepositoryFacade, times(1)).getGroupOrThrow(groupId);
+        verify(strategyFactory, times(1)).getStrategy(strategyType);
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
+    }
+
+    @Test
+    void suggest_ShouldHandleZeroRoundTo_WhenRoundToIsNull() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.SMALLEST_AMOUNTS_FIRST;
+
+        GroupEntity group = createGroupEntity();
+
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        balances.put(1L, new BigDecimal("75.50"));
+        balances.put(2L, new BigDecimal("-75.50"));
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = List.of(
+                new SettlementSuggestion(2L, 1L, new BigDecimal("75.50"))
+        );
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), any())).thenReturn(expectedSuggestions);
+
+        // Act - Pass null for roundTo
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, null);
+
+        // Assert
+        assertNotNull(result);
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), any());
+    }
+
+    @Test
+    void suggest_ShouldHandleComplexBalanceScenario() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("5.00");
+
+        GroupEntity group = createGroupEntity();
+
+        // Complex balance scenario with multiple creditors and debtors
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        balances.put(1L, new BigDecimal("150.00"));  // Creditor 1
+        balances.put(2L, new BigDecimal("-80.00"));  // Debtor 1
+        balances.put(3L, new BigDecimal("-40.00"));  // Debtor 2
+        balances.put(4L, new BigDecimal("-30.00"));  // Debtor 3
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = Arrays.asList(
+                new SettlementSuggestion(2L, 1L, new BigDecimal("80.00")),
+                new SettlementSuggestion(3L, 1L, new BigDecimal("40.00")),
+                new SettlementSuggestion(4L, 1L, new BigDecimal("30.00"))
+        );
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(expectedSuggestions);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(3, result.getTotalTransfers());
+        assertEquals(3, result.getSuggestions().size());
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
+    }
+
+    @Test
+    void suggest_ShouldHandleZeroBalances() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("1.00");
+
+        GroupEntity group = createGroupEntity();
+
+        // All balances are zero (no debts)
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        balances.put(1L, BigDecimal.ZERO);
+        balances.put(2L, BigDecimal.ZERO);
+        balances.put(3L, BigDecimal.ZERO);
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = Collections.emptyList();
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(expectedSuggestions);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(0, result.getTotalTransfers());
+        assertTrue(result.getSuggestions().isEmpty());
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
+    }
+
+    @Test
+    void suggest_ShouldHandleNegativeRoundTo() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal negativeRoundTo = new BigDecimal("-1.00"); // Should be handled gracefully
+
+        GroupEntity group = createGroupEntity();
+
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        balances.put(1L, new BigDecimal("50.00"));
+        balances.put(2L, new BigDecimal("-50.00"));
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = Arrays.asList(
+                new SettlementSuggestion(2L, 1L, new BigDecimal("50.00"))
+        );
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), eq(negativeRoundTo))).thenReturn(expectedSuggestions);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, negativeRoundTo);
+
+        // Assert
+        assertNotNull(result);
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(negativeRoundTo));
+    }
+
+    @Test
+    void suggest_ShouldHandleDifferentStrategyTypes() {
+        // Test all available strategy types
+        SettlementStrategyType[] strategyTypes = SettlementStrategyType.values();
+
+        for (SettlementStrategyType strategyType : strategyTypes) {
+            // Arrange
+            Long groupId = 1L;
+            BigDecimal roundTo = new BigDecimal("1.00");
+
+            GroupEntity group = createGroupEntity();
+
+            Map<Long, BigDecimal> balances = new HashMap<>();
+            balances.put(1L, new BigDecimal("100.00"));
+            balances.put(2L, new BigDecimal("-100.00"));
+
+            SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+            List<SettlementSuggestion> expectedSuggestions = Arrays.asList(
+                    new SettlementSuggestion(2L, 1L, new BigDecimal("100.00"))
+            );
+
+            when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+            when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+            when(mockStrategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(expectedSuggestions);
+
+            // Act
+            SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+            // Assert
+            assertNotNull(result);
+            assertEquals(strategyType, result.getStrategy());
+
+            // Reset mocks for next iteration
+            reset(groupRepositoryFacade, strategyFactory, mockStrategy);
+        }
+    }
+
+    @Test
+    void suggest_ShouldProperlyConvertBalancesToUserBalanceList() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("1.00");
+
+        GroupEntity group = createGroupEntity();
+
+        // Add expenses and shares to the group so getBalancesByGroupId returns correct balances
+        List<ExpenseEntity> expenses = new ArrayList<>();
+
+        // Create an expense that results in the desired balances
+        ExpenseEntity expense1 = ExpenseEntity.builder()
+                .id(1L)
+                .amount(new BigDecimal("150.75"))
+                .paidBy(UserEntity.builder().id(1L).build())
+                .shares(new ArrayList<>())
+                .build();
+
+        expense1.getShares().add(ExpenseShareEntity.builder()
+                .user(UserEntity.builder().id(1L).build())
+                .shareAmount(new BigDecimal("150.75"))  // Positive for creditor
+                .build());
+        expense1.getShares().add(ExpenseShareEntity.builder()
+                .user(UserEntity.builder().id(2L).build())
+                .shareAmount(new BigDecimal("-80.25"))  // Negative for debtor
+                .build());
+        expense1.getShares().add(ExpenseShareEntity.builder()
+                .user(UserEntity.builder().id(3L).build())
+                .shareAmount(new BigDecimal("-70.50"))  // Negative for debtor
+                .build());
+
+        expenses.add(expense1);
+        group.setExpenses(expenses);
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+
+        // Capture the UserBalance list passed to the strategy
+        List<UserBalance> capturedUserBalances = new ArrayList<>();
+        when(mockStrategy.suggestSettlements(anyList(), eq(roundTo)))
+                .thenAnswer(invocation -> {
+                    List<UserBalance> userBalances = invocation.getArgument(0);
+                    capturedUserBalances.addAll(userBalances);
+                    return Arrays.asList(
+                            new SettlementSuggestion(2L, 1L, new BigDecimal("80.25")),
+                            new SettlementSuggestion(3L, 1L, new BigDecimal("70.50"))
+                    );
+                });
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+        // Assert
+        assertNotNull(result);
+
+        // Verify UserBalance conversion
+        assertEquals(3, capturedUserBalances.size());
+
+        // Find each user's balance
+        Map<Long, BigDecimal> capturedMap = capturedUserBalances.stream()
+                .collect(Collectors.toMap(
+                        UserBalance::getUserId,
+                        UserBalance::getBalance
+                ));
+
+        assertEquals(new BigDecimal("150.75"), capturedMap.get(1L));
+        assertEquals(new BigDecimal("-80.25"), capturedMap.get(2L));
+        assertEquals(new BigDecimal("-70.50"), capturedMap.get(3L));
+
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
+    }
+    @Test
+    void suggest_ShouldHandleGroupWithNoExpenses() {
+        // Arrange
+        Long groupId = 1L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("1.00");
+
+        GroupEntity group = createGroupEntity();
+        group.setExpenses(Collections.emptyList()); // No expenses
+
+        // When there are no expenses, balances should be empty
+        Map<Long, BigDecimal> balances = Collections.emptyMap();
+
+        SettlementStrategy mockStrategy = mock(SettlementStrategy.class);
+        List<SettlementSuggestion> expectedSuggestions = Collections.emptyList();
+
+        when(groupRepositoryFacade.getGroupOrThrow(groupId)).thenReturn(group);
+        when(strategyFactory.getStrategy(strategyType)).thenReturn(mockStrategy);
+        when(mockStrategy.suggestSettlements(anyList(), eq(roundTo))).thenReturn(expectedSuggestions);
+
+        // Act
+        SuggestionResponse result = groupService.suggest(groupId, strategyType, roundTo);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(0, result.getTotalTransfers());
+        assertTrue(result.getSuggestions().isEmpty());
+        verify(mockStrategy, times(1)).suggestSettlements(anyList(), eq(roundTo));
+    }
+
+    @Test
+    void suggest_ShouldThrowException_WhenGroupNotFound() {
+        // Arrange
+        Long nonExistentGroupId = 999L;
+        SettlementStrategyType strategyType = SettlementStrategyType.GREEDY_MIN_TRANSFERS;
+        BigDecimal roundTo = new BigDecimal("1.00");
+
+        when(groupRepositoryFacade.getGroupOrThrow(nonExistentGroupId))
+                .thenThrow(new NotFoundException("Group not found"));
+
+        // Act & Assert
+        NotFoundException exception = assertThrows(
+                NotFoundException.class,
+                () -> groupService.suggest(nonExistentGroupId, strategyType, roundTo)
+        );
+
+        assertEquals("Group not found", exception.getMessage());
+        verify(strategyFactory, never()).getStrategy(any());
     }
 }
